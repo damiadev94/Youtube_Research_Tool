@@ -25,11 +25,18 @@ def video_id_from_url(url: str) -> str:
 
 
 def normalize_views(text: str) -> int | None:
-    """Convert common YouTube view counts; return None for ambiguous text."""
+    """Convert a YouTube view-count string; return None when it is not a count."""
     cleaned = " ".join((text or "").lower().replace("\u00a0", " ").split())
     if not cleaned:
         return None
-    match = re.search(r"(\d+(?:[.,]\d+)?)\s*([kmb]|mil|millones?|thousand|million|billion)?\s*(?:views?|vistas?)\b", cleaned)
+    # YouTube's compact search UI may expose "103 k" without "views"/"vistas".
+    # Keep the match anchored so a relative date (for example "hace 2 años")
+    # can never be interpreted as a view count.
+    match = re.fullmatch(
+        r"(\d+(?:[.,]\d+)?)\s*([kmb]|mil|millones?|thousand|million|billion)?"
+        r"(?:\s*(?:views?|vistas?))?",
+        cleaned,
+    )
     if not match:
         return None
     number_text, suffix = match.groups()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .models import SearchQuery, VideoResult
@@ -10,6 +11,46 @@ class YouTubeExtractor:
     """All YouTube DOM selectors live here so they can be updated in one place."""
 
     RESULT = "ytd-video-renderer"
+    METADATA = "#metadata-line span"
+
+    @staticmethod
+    def _is_published_text(text: str) -> bool:
+        """Recognize visible publication/relative-date text, never inventing dates."""
+        normalized = " ".join(text.lower().replace("\u00a0", " ").split())
+        if re.fullmatch(r"(?:19|20)\d{2}", normalized):
+            return True
+        return bool(re.search(
+            r"\b(hace|ago|streamed|premiered|published|publicado|emitido|estrenado|"
+            r"en vivo|live|today|yesterday|hoy|ayer)\b",
+            normalized,
+        ))
+
+    @staticmethod
+    def _is_view_text(text: str) -> bool:
+        normalized = " ".join(text.lower().replace("\u00a0", " ").split())
+        if "view" in normalized or "vista" in normalized:
+            return normalize_views(text) is not None
+        # Bare counts are accepted only when their compact suffix makes their
+        # meaning unambiguous in YouTube's metadata line (e.g. "103 k").
+        return bool(re.fullmatch(
+            r"\d+(?:[.,]\d+)?\s*(?:k|m|b|mil|millones?|thousand|million|billion)",
+            normalized,
+        ))
+
+    @classmethod
+    def classify_metadata(cls, metadata: list[str]) -> tuple[str, str]:
+        """Return (views_text, published_text) from an unordered metadata list."""
+        views_text = ""
+        published_text = ""
+        for text in metadata:
+            visible = text.strip()
+            if not visible:
+                continue
+            if not published_text and cls._is_published_text(visible):
+                published_text = visible
+            elif not views_text and cls._is_view_text(visible):
+                views_text = visible
+        return views_text, published_text
 
     @staticmethod
     def _text(node: Any, selector: str) -> str:
@@ -38,9 +79,8 @@ class YouTubeExtractor:
             if not video_id or not title or video_id in seen_ids:
                 continue
             seen_ids.add(video_id)
-            metadata = [text.strip() for text in card.locator("#metadata-line span").all_text_contents() if text.strip()]
-            views_text = next((item for item in metadata if "view" in item.lower() or "vista" in item.lower()), "")
-            published = next((item for item in metadata if item != views_text), "")
+            metadata = [text.strip() for text in card.locator(self.METADATA).all_text_contents() if text.strip()]
+            views_text, published = self.classify_metadata(metadata)
             thumb = self._attr(card, "ytd-thumbnail img", "src") or self._attr(card, "ytd-thumbnail img", "data-thumb")
             collected.append(VideoResult(
                 query=search.query, category=search.category, position=len(collected) + 1,

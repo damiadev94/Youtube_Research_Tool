@@ -56,17 +56,17 @@ def run(config: Config) -> int:
                     videos += storage.save_results(results)
                     storage.mark_completed(search)
                     completed += 1
-                    print(f"    ✓ {len(results)} videos")
+                    print(f"    OK {len(results)} videos")
                     break
                 except Exception as error:
                     if attempt < config.retries:
-                        print(f"    ⚠ {type(error).__name__} → retry {attempt + 1}/{config.retries}")
+                        print(f"    WARNING {type(error).__name__}; retry {attempt + 1}/{config.retries}")
                         logger.warning("Query %r attempt %d failed: %s", search.query, attempt + 1, error)
                         continue
                     failed += 1
                     storage.save_error(search, error, utc_now(), attempt)
                     logger.exception("Query %r failed after %d retries", search.query, config.retries)
-                    print(f"    ✗ failed: {error}")
+                    print(f"    FAILED: {error}")
             if number < total:
                 time.sleep(random.uniform(config.delay_min, config.delay_max))
 
