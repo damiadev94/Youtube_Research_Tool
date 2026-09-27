@@ -5,3 +5,6 @@ __pycache__/
 output/*.csv
 output/*.json
 logs/*.log
+input/*.csv
+searches.csv
+output
